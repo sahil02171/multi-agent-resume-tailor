@@ -1,0 +1,11 @@
+streamlit
+langgraph
+google-genai
+groq
+pydantic
+pymupdf
+fpdf2
+tavily-python
+requests
+beautifulsoup4
+python-dotenv
