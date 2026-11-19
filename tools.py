@@ -1,3 +1,4 @@
+import streamlit as st
 import os
 import re
 import pymupdf as fitz
@@ -48,7 +49,7 @@ def scrape_job_url(url: str) -> str:
 
 def research_company(company_name: str, role_title: str) -> str:
     """Fetches company tech stack and recent engineering insights via Tavily with caching."""
-    api_key = os.getenv("TAVILY_API_KEY")
+    api_key = os.getenv("TAVILY_API_KEY") or (st.secrets["TAVILY_API_KEY"] if "TAVILY_API_KEY" in st.secrets else None)
     if not api_key or not company_name or company_name.lower() in ["unknown", "n/a", "not specified", ""]:
         return "No company specified in JD; skipped live web search."
 

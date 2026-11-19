@@ -3,6 +3,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
+import streamlit as st
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -13,10 +14,17 @@ from schemas import JDAnalysis, GapReport, TailoredContent
 from tools import research_company
 
 load_dotenv()
+def _get_secret(key_name: str) -> str | None:
+    val = os.getenv(key_name)
+    if not val and key_name in st.secrets:
+        val = st.secrets[key_name]
+    return val
 
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-groq_api_key = os.getenv("GROQ_API_KEY")
+gemini_api_key = _get_secret("GEMINI_API_KEY")
+gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+groq_api_key = _get_secret("GROQ_API_KEY")
 groq_client = Groq(api_key=groq_api_key) if groq_api_key else None
+
 
 # Active Gemini models only (removed deprecated 2.5 / 3.0 models)
 GEMINI_MODELS = [
@@ -40,28 +48,29 @@ def _call_structured_llm(prompt: str, response_schema):
     last_error = None
 
     # 1. Try Google Gemini Models
-    for model_id in GEMINI_MODELS:
-        for attempt in range(2):
-            try:
-                response = gemini_client.models.generate_content(
-                    model=model_id,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=response_schema,
-                        temperature=0.2,
-                    ),
-                )
-                return response.parsed
-            except Exception as e:
-                last_error = e
-                err_str = str(e)
-                if "503" in err_str or "UNAVAILABLE" in err_str:
-                    time.sleep(1.0)
-                    continue
-                if any(code in err_str for code in ["404", "NOT_FOUND", "429", "RESOURCE_EXHAUSTED"]):
-                    break
-                raise e
+    if gemini_client:
+        for model_id in GEMINI_MODELS:
+            for attempt in range(2):
+                try:
+                    response = gemini_client.models.generate_content(
+                        model=model_id,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=response_schema,
+                            temperature=0.2,
+                        ),
+                    )
+                    return response.parsed
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e)
+                    if "503" in err_str or "UNAVAILABLE" in err_str:
+                        time.sleep(1.0)
+                        continue
+                    if any(code in err_str for code in ["404", "NOT_FOUND", "429", "RESOURCE_EXHAUSTED"]):
+                        break
+                    raise e
 
     # 2. Automatic Failover to Groq (High-speed backup when Gemini has 503/429)
     if groq_client:
